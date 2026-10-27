@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Object Detector</title>
+<style>
+  body { margin:0; background:#111; color:#fff; font-family:sans-serif; text-align:center; }
+  #wrap { position:relative; width:100%; max-width:640px; margin:0 auto; }
+  video, canvas { width:100%; display:block; }
+  canvas { position:absolute; top:0; left:0; height:100%; }
+  button { margin:12px; padding:12px 24px; font-size:16px; border:0; border-radius:8px; background:#4caf50; color:#fff; }
+  #status { padding:8px; font-size:14px; }
+</style>
+</head>
+<body>
+  <div id="status">Press Start</div>
+  <div id="wrap">
+    <video id="video" playsinline muted autoplay></video>
+    <canvas id="canvas"></canvas>
+  </div>
+  <button id="start">Start Camera</button>
+
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3"></script>
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const status = document.getElementById('status');
+
+    const COLORS = {
+      'person': '#e664e6',
+      'car': '#78ff00',
+      'traffic light': '#ffeb3b',
+      'stop sign': '#5064ff'
+    };
+
+    document.getElementById('start').onclick = async () => {
+      try {
+        status.textContent = 'Loading model...';
+        const model = await cocoSsd.load();
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' }, audio: false
+        });
+        video.srcObject = stream;
+        await video.play();
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        document.getElementById('start').style.display = 'none';
+        status.textContent = 'Detecting...';
+
+        async function loop() {
+          const preds = await model.detect(video);
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.lineWidth = 4;
+          ctx.font = '20px monospace';
+          for (const p of preds) {
+            if (p.score < 0.5) continue;
+            const [x, y, w, h] = p.bbox;
+            const color = COLORS[p.class] || '#00e5ff';
+            const label = p.class + ' ' + Math.round(p.score * 100) + '%';
+            ctx.strokeStyle = color;
+            ctx.strokeRect(x, y, w, h);
+            ctx.fillStyle = color;
+            const tw = ctx.measureText(label).width + 10;
+            ctx.fillRect(x, y - 26, tw, 26);
+            ctx.fillStyle = '#000';
+            ctx.fillText(label, x + 5, y - 6);
+          }
+          requestAnimationFrame(loop);
+        }
+        loop();
+      } catch (e) {
+        status.textContent = 'Error: ' + e.message;
+      }
+    };
+  </script>
+</body>
+</html>
